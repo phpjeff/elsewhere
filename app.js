@@ -45,6 +45,76 @@ function buildPlaces(mapFeatures){
   return [...entries.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
 const visited=code=>!!visits[code]?.visited;
+let viewMode='map', globeRadius=1, lastTransform, drawingFrame=0, programmaticPan=false;
+function redrawGlobe(){
+  if(drawingFrame)return;
+  drawingFrame=requestAnimationFrame(()=>{drawingFrame=0;layer.selectAll('path').attr('d',path)});
+}
+function panBy(x,y){
+  programmaticPan=true;
+  try{svg.call(zoom.translateBy,x,y)}finally{programmaticPan=false}
+}
+function renderZoom(event){
+  sampleDrag(event);
+  const transform=event.transform;
+  if(viewMode==='globe'){
+    const source=event.sourceEvent;
+    const dragging=source?.type==='mousemove'||(source?.type==='touchmove'&&source.touches.length===1);
+    if(lastTransform&&(dragging||programmaticPan)){
+      const rotation=projection.rotate();
+      const degrees=180/(Math.PI*globeRadius*transform.k);
+      rotation[0]+=(transform.x-lastTransform.x)*degrees;
+      rotation[1]=Math.max(-89.9,Math.min(89.9,rotation[1]-(transform.y-lastTransform.y)*degrees));
+      projection.rotate(rotation);
+    }
+    projection.scale(globeRadius*transform.k);
+    layer.attr('transform',null);
+    redrawGlobe();
+  }else layer.attr('transform',transform);
+  lastTransform=transform;
+  $('tooltip').hidden=true;
+  document.querySelectorAll('.ocean-label').forEach(el=>el.style.opacity=viewMode==='globe'||transform.k>1.3?'0':'.7');
+}
+function configureView(){
+  stopNavigation();stopGlide();cancelAnimationFrame(drawingFrame);drawingFrame=0;
+  width=innerWidth;height=innerHeight;
+  const rotation=viewMode==='globe'&&projection?.rotate?projection.rotate():[-15,-20,0];
+  if(viewMode==='globe'){
+    globeRadius=Math.max(60,Math.min(width*.43,height*.34));
+    projection=d3.geoOrthographic().translate([width/2,height*.55]).scale(globeRadius).rotate(rotation).clipAngle(90);
+  }else{
+    projection=d3.geoNaturalEarth1().fitExtent([[22,height*.18],[width-22,height*.87]],{type:'FeatureCollection',features:features.filter(f=>f.properties.ADM0_A3!=='ATA')});
+  }
+  path.projection(projection);
+  layer.select('.globe-ocean').style('display',viewMode==='globe'?null:'none');
+  layer.selectAll('path').attr('d',path);
+  zoom.extent([[0,0],[width,height]]).translateExtent(viewMode==='globe'?[[-Infinity,-Infinity],[Infinity,Infinity]]:[[-width*.5,-height*.5],[width*1.5,height*1.5]]);
+  lastTransform=d3.zoomIdentity;
+  svg.call(zoom.transform,d3.zoomIdentity);
+}
+function switchView(mode){
+  if(!svg||mode===viewMode)return;
+  viewMode=mode;
+  document.querySelectorAll('[data-view]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===mode)));
+  document.body.classList.toggle('globe-view',mode==='globe');
+  configureView();
+  if(mode==='globe')projection.rotate([-15,-20,0]);
+  if(selected)focusCountry(selected);
+  else if(mode==='globe')redrawGlobe();
+}
+document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.view));
+function focusGlobe(feature){
+  const center=d3.geoCentroid(feature);
+  const start=projection.rotate();
+  const targetLongitude=-center[0];
+  const shortest=((targetLongitude-start[0]+540)%360)-180;
+  const target=[start[0]+shortest,-center[1],0];
+  const interpolate=d3.interpolateArray(start,target);
+  const current=d3.zoomTransform(svg.node());
+  svg.transition().duration(duration).ease(d3.easeCubicInOut)
+    .tween('rotation',()=>t=>{projection.rotate(interpolate(t));redrawGlobe()})
+    .call(zoom.transform,d3.zoomIdentity.translate(current.x,current.y).scale(1.7));
+}
 const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:650;
 // Sample actual map movement so inertia follows the drag at every zoom level.
 let glideFrame=0, dragSamples=[], dragEligible=false;
@@ -84,7 +154,7 @@ function releaseDrag(event){
     if(dt>100){stopGlide();return}
     const attenuation=Math.exp(-dt/decay);
     const before=d3.zoomTransform(svg.node());
-    svg.call(zoom.translateBy,vx*decay*(1-attenuation)/before.k,vy*decay*(1-attenuation)/before.k);
+    panBy(vx*decay*(1-attenuation)/before.k,vy*decay*(1-attenuation)/before.k);
     const after=d3.zoomTransform(svg.node());
     vx*=attenuation;vy*=attenuation;
     if(Math.abs(after.x-before.x)<0.001)vx=0;
@@ -166,12 +236,12 @@ function keyboardFrame(now){
   panX+=(dx/length*.7-panX)*blend;panY+=(dy/length*.7-panY)*blend;
   zoomSpeed+=(dz*.002-zoomSpeed)*blend;
   const transform=d3.zoomTransform(svg.node());
-  if(Math.hypot(panX,panY)>.005)svg.call(zoom.translateBy,panX*dt/transform.k,panY*dt/transform.k);
+  if(Math.hypot(panX,panY)>.005)panBy(panX*dt/transform.k,panY*dt/transform.k);
   if(Math.abs(zoomSpeed)>.00001)svg.call(zoom.scaleBy,Math.exp(zoomSpeed*dt));
   if(heldKeys.size||Math.hypot(panX,panY)>.005||Math.abs(zoomSpeed)>.00001)keyFrame=requestAnimationFrame(keyboardFrame);
   else{keyFrame=0;panX=panY=zoomSpeed=0}
 }
-function reset(){stopNavigation();stopGlide();if(svg)svg.transition().duration(duration).call(zoom.transform,d3.zoomIdentity)}
+function reset(){stopNavigation();stopGlide();if(viewMode==='globe'){projection.rotate([-15,-20,0]);redrawGlobe()}if(svg)svg.transition().duration(duration).call(zoom.transform,d3.zoomIdentity)}
 function scale(factor){stopNavigation();stopGlide();if(svg)svg.transition().duration(duration?420:0).ease(d3.easeCubicOut).call(zoom.scaleBy,factor)}
 function wheelZoom(event){
   event.preventDefault();
@@ -196,7 +266,7 @@ window.addEventListener('keydown',event=>{
   event.preventDefault();
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){
     const offsets={ArrowLeft:[90,0],ArrowRight:[-90,0],ArrowUp:[0,90],ArrowDown:[0,-90]};
-    if(offsets[event.key]){const k=d3.zoomTransform(svg.node()).k;svg.call(zoom.translateBy,...offsets[event.key].map(n=>n/k))}
+    if(offsets[event.key]){const k=d3.zoomTransform(svg.node()).k;panBy(...offsets[event.key].map(n=>n/k))}
     else svg.call(zoom.scaleBy,event.key==='-'?1/1.3:1.3);
     return;
   }
@@ -207,12 +277,12 @@ window.addEventListener('keyup',event=>{heldKeys.delete(event.key);if(event.code
 for(const type of ['pointerdown','touchstart','blur'])window.addEventListener(type,stopNavigation,{capture:true,passive:true});
 document.addEventListener('visibilitychange',stopNavigation);
 document.addEventListener('focusin',event=>{if(event.target.id!=='map')stopNavigation()});
-function focusCountry(country){stopNavigation();stopGlide();if(!svg)return;const feature=features.find(f=>f.code===country.code);if(!feature)return;const [[x0,y0],[x1,y1]]=path.bounds(feature);const k=Math.min(28,Math.max(1,Math.min(width*.58/(x1-x0||5),height*.58/(y1-y0||5))));svg.transition().duration(duration).call(zoom.transform,d3.zoomIdentity.translate(width/2,height/2).scale(k).translate(-(x0+x1)/2,-(y0+y1)/2))}
+function focusCountry(country){stopNavigation();stopGlide();if(!svg)return;const feature=features.find(f=>f.code===country.code);if(!feature)return;if(viewMode==='globe'){focusGlobe(feature);return}const [[x0,y0],[x1,y1]]=path.bounds(feature);const k=Math.min(28,Math.max(1,Math.min(width*.58/(x1-x0||5),height*.58/(y1-y0||5))));svg.transition().duration(duration).call(zoom.transform,d3.zoomIdentity.translate(width/2,height/2).scale(k).translate(-(x0+x1)/2,-(y0+y1)/2))}
 async function loadData(){for(const url of ['assets/countries.geojson','https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson','https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson']){try{const response=await fetch(url);if(response.ok){const data=await response.json();if(data.type==='FeatureCollection')return data}}catch{}}throw new Error('Map data unavailable')}
 async function init(){update();try{if(!window.d3)throw new Error('Map library unavailable');const data=await loadData();features=data.features.map(normalizeFeature);
 // Very small states absent from generalized polygons remain visible and selectable.
 const tiny={VA:[12.4534,41.9029],MC:[7.4246,43.7384],NR:[166.9315,-.5228],TV:[179.194,-8.5211]};for(const [code,coordinates] of Object.entries(tiny)){if(!features.some(f=>f.code===code))features.push({type:'Feature',code,properties:{CONTINENT:'SMALL STATES'},geometry:{type:'Point',coordinates}})}
 places=buildPlaces(features);
-svg=d3.select('#map');layer=svg.append('g');projection=d3.geoNaturalEarth1();path=d3.geoPath(projection).pointRadius(2);zoom=d3.zoom().scaleExtent([1,35]).clickDistance(6).on('start.inertia',startDrag).on('end.inertia',releaseDrag).on('zoom',event=>{sampleDrag(event);layer.attr('transform',event.transform);$('tooltip').hidden=true;document.querySelectorAll('.ocean-label').forEach(el=>el.style.opacity=event.transform.k>1.3?'0':'.7')});svg.call(zoom).on('wheel.zoom',null).on('wheel.smooth',wheelZoom,{passive:false});layer.append('path').datum(d3.geoGraticule10()).attr('class','graticule');paths=layer.selectAll('.country').data(features).join('path').attr('class',d=>COUNTRY_CODES.includes(d.code)?'country':'country territory').attr('aria-label',d=>places.find(p=>p.code===d.code)?.name).on('click',(event,d)=>{choose(places.find(c=>c.code===d.code));$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')}).on('mousemove',(event,d)=>{const name=places.find(c=>c.code===d.code)?.name;$('tooltip').textContent=name+(visited(d.code)?' · Visited':'')+(categoryFor(d.code)?` · ${categories[categoryFor(d.code).id]}`:'');$('tooltip').hidden=false;$('tooltip').style.left=Math.min(event.clientX+14,width-180)+'px';$('tooltip').style.top=Math.min(event.clientY+16,height-45)+'px'}).on('mouseleave',()=>$('tooltip').hidden=true);
-function resize(){stopNavigation();stopGlide();width=innerWidth;height=innerHeight;projection.fitExtent([[22,height*.18],[width-22,height*.87]],{type:'FeatureCollection',features:features.filter(f=>f.properties.ADM0_A3!=='ATA')});layer.selectAll('path').attr('d',path);zoom.extent([[0,0],[width,height]]).translateExtent([[-width*.5,-height*.5],[width*1.5,height*1.5]]);svg.call(zoom.transform,d3.zoomIdentity)}resize();window.addEventListener('resize',resize);$('loading').hidden=true;update();const missing=countries.filter(c=>!features.some(f=>f.code===c.code));if(missing.length)console.warn('Search-only countries:',missing.map(c=>c.name));}catch(error){$('loading').textContent='The map couldn’t load. Check your internet connection and refresh. Your country checklist is still available through search.';console.error(error)}}
+svg=d3.select('#map');layer=svg.append('g');projection=d3.geoNaturalEarth1();path=d3.geoPath(projection).pointRadius(2);zoom=d3.zoom().scaleExtent([1,35]).clickDistance(6).on('start.inertia',startDrag).on('end.inertia',releaseDrag).on('zoom',renderZoom);svg.call(zoom).on('wheel.zoom',null).on('wheel.smooth',wheelZoom,{passive:false});layer.append('path').datum({type:'Sphere'}).attr('class','globe-ocean');layer.append('path').datum(d3.geoGraticule10()).attr('class','graticule');paths=layer.selectAll('.country').data(features).join('path').attr('class',d=>COUNTRY_CODES.includes(d.code)?'country':'country territory').attr('aria-label',d=>places.find(p=>p.code===d.code)?.name).on('click',(event,d)=>{choose(places.find(c=>c.code===d.code));$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')}).on('mousemove',(event,d)=>{const name=places.find(c=>c.code===d.code)?.name;$('tooltip').textContent=name+(visited(d.code)?' · Visited':'')+(categoryFor(d.code)?` · ${categories[categoryFor(d.code).id]}`:'');$('tooltip').hidden=false;$('tooltip').style.left=Math.min(event.clientX+14,width-180)+'px';$('tooltip').style.top=Math.min(event.clientY+16,height-45)+'px'}).on('mouseleave',()=>$('tooltip').hidden=true);
+configureView();window.addEventListener('resize',configureView);$('loading').hidden=true;document.querySelectorAll('[data-view]').forEach(button=>button.disabled=false);update();const missing=countries.filter(c=>!features.some(f=>f.code===c.code));if(missing.length)console.warn('Search-only countries:',missing.map(c=>c.name));}catch(error){$('loading').textContent='The map couldn’t load. Check your internet connection and refresh. Your country checklist is still available through search.';console.error(error)}}
 init();

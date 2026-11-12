@@ -31,3 +31,9 @@
 .place-kind{display:block;font-size:9px;color:#8a9586;margin-top:4px;font-weight:400}
 #area-count{font-size:10px;color:#64816f;margin-top:8px}
 #place-note{margin:0 0 12px}
+.view-switch{position:absolute;top:35px;left:50%;transform:translateX(-50%);display:flex;gap:3px;padding:4px;border:1px solid #fff;border-radius:10px;background:#fffefaec;box-shadow:0 4px 20px #283e3b08}
+.view-switch button{padding:9px 19px;border-radius:7px;font-size:12px;color:#738174}
+.view-switch button[aria-pressed="true"]{background:#386e5b;color:white}
+.globe-ocean{fill:#ecf0e7;stroke:#a6baaa;stroke-width:1;filter:drop-shadow(0 9px 12px #294e4018)}
+.globe-view .graticule{stroke-opacity:.24}
+@media(max-width:700px){.view-switch{top:169px;left:20px;transform:none}.view-switch button{padding:8px 16px}}
