@@ -57,3 +57,7 @@
 .settings-actions button{padding:9px 12px;border-radius:7px;background:#e8eee2;font-size:12px;color:#304d3e}
 .settings-actions .restore-button{background:#386e5b;color:#fffefa}
 #settings-restore{margin-top:16px;border-top:1px solid #dce3d6}
+
+.states-view .ocean-label{display:none}
+@media(min-width:701px) and (max-width:1100px){.view-controls{top:100px}}
+@media(max-width:400px){.view-controls{gap:3px}.view-switch button{padding:8px 12px}.visit-switch{font-size:11px;padding:9px 4px}}
