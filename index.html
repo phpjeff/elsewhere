@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2ea"><title>Elsewhere — Your world, explored</title><link rel="stylesheet" href="style.css?v=visited-colors"><script defer src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script><script defer src="app.js?v=map-controls"></script></head>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2ea"><title>Elsewhere — Your world, explored</title><link rel="stylesheet" href="style.css?v=settings-backup"><script defer src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script><script defer src="app.js?v=settings-backup"></script></head>
 <body>
 <main id="atlas"><svg id="map" tabindex="0" role="application" aria-label="Interactive world map. Arrow keys pan, plus and minus zoom, Home resets. Search to select countries with a keyboard."></svg><div id="loading">Unfolding your world…</div></main>
 <header><a class="brand" href="./" aria-label="Elsewhere home"><span class="brand-icon">✳</span> elsewhere<span class="brand-dot">.</span></a><div class="tagline">YOUR WORLD, EXPLORED</div></header>
@@ -14,7 +14,25 @@
 <p id="category-summary" class="category-help">Choose a color to assign a category.</p>
 </section><button id="focus-button" class="secondary">Zoom to country ↗</button></section>
 <div class="map-controls"><button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button><button id="zoom-out" aria-label="Zoom out" title="Zoom out (−)">−</button><span></span><button id="reset" aria-label="Show whole world" title="Reset view (Home)">⌖</button></div>
-<footer><div class="legend"><span></span> Visited <i></i> Yet to explore</div><div class="hint">Drag to explore <b>·</b> Scroll to zoom <b>·</b> Click a country to begin</div><button id="about-button" aria-label="Map information and keyboard shortcuts">ⓘ <span>Map notes</span></button></footer>
+<footer><div class="legend"><span></span> Visited <i></i> Yet to explore</div><div class="hint">Drag to explore <b>·</b> Scroll to zoom <b>·</b> Click a country to begin</div><div class="footer-tools"><button id="settings-button" type="button">Settings</button><button id="about-button" aria-label="Map information and keyboard shortcuts">ⓘ <span>Map notes</span></button></div></footer>
 <div id="toast" role="status" aria-live="polite"></div>
 <dialog id="about"><button id="close-about" class="close" aria-label="Close map notes">×</button><div class="eyebrow">A LITTLE PERSPECTIVE</div><h2>A world of possibilities.</h2><p>The travel checklist includes 193 United Nations member states plus Palestine and the Holy See: 195 countries. Territories and other land areas can also be assigned color categories that count as visited. Their visits are counted separately from the 195 countries. Only areas represented in the map data are selectable.</p><p>Boundaries use Natural Earth’s 1:50m cartography and its de facto boundary conventions. Disputed borders and country recognition vary; this map does not express a political position. The map loads the latest available Natural Earth source when opened; cartographic releases may lag real-world changes.</p><p><b>Explore:</b> drag or swipe to pan the map or rotate the globe; scroll, pinch, or + / − to zoom; arrow keys to pan; Home to reset; / to search; Escape to close panels. Search provides access to very small countries.</p><p id="save-note">Your visits are saved in this browser only. Clearing browser data removes them.</p><a href="https://www.naturalearthdata.com/about/disputed-boundaries-policy/" target="_blank" rel="noopener">Natural Earth map data & boundary policy ↗</a></dialog>
+<dialog id="settings" aria-labelledby="settings-title">
+  <button id="close-settings" type="button" class="close" aria-label="Close settings">×</button>
+  <h2 id="settings-title">Map settings</h2>
+  <p>Back up your visits, place colors, and category names and rules. Restore them in another browser or device.</p>
+  <div class="settings-actions">
+    <button id="download-settings" type="button">Download settings</button>
+    <button id="upload-settings" type="button">Upload settings</button>
+    <input id="settings-file" type="file" accept=".json,application/json" hidden>
+  </div>
+  <div id="settings-restore" hidden>
+    <p id="settings-preview"></p>
+    <div class="settings-actions">
+      <button id="restore-settings" class="restore-button" type="button">Replace settings</button>
+      <button id="cancel-restore" type="button">Cancel</button>
+    </div>
+  </div>
+  <p id="settings-status" role="status" aria-live="polite" hidden></p>
+</dialog>
 </body></html>

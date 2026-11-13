@@ -51,3 +51,9 @@
 #map.visited-only .country.categorized:not(.visited){fill:#e3e4d8;stroke:#a9b8ac}
 #map.visited-only .country.territory.categorized:not(.visited){fill:#e7e6dc;stroke:#b6bfb2}
 #map.visited-only .country.categorized:not(.visited):is(:hover,.selected){fill:#cfdbcc;stroke:#547d6d}
+
+.footer-tools{display:flex;align-items:center;gap:6px}
+.settings-actions{display:flex;flex-wrap:wrap;gap:8px}
+.settings-actions button{padding:9px 12px;border-radius:7px;background:#e8eee2;font-size:12px;color:#304d3e}
+.settings-actions .restore-button{background:#386e5b;color:#fffefa}
+#settings-restore{margin-top:16px;border-top:1px solid #dce3d6}

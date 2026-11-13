@@ -19,7 +19,8 @@ const repository={
   read(){try{const raw=JSON.parse(localStorage.getItem(KEY)||'{}');return raw?.version===1?raw:{}}catch{return {}}},
   load(){const value=this.read().countries;return value&&typeof value==='object'&&!Array.isArray(value)?value:{}},
   loadCategories(){const names=this.read().categories;return Object.fromEntries(PALETTE.map(p=>[p.id,typeof names?.[p.id]==='string'&&names[p.id].trim()?names[p.id].trim().slice(0,32):p.name]))},
-  save(countries){try{localStorage.setItem(KEY,JSON.stringify({version:1,countries,categories,categoryVisits}));return true}catch{return false}}
+  save(countries){return this.write({version:1,countries,categories,categoryVisits})},
+  write(settings){try{localStorage.setItem(KEY,JSON.stringify(settings));return true}catch{return false}}
 };
 function loadCategoryVisits(){
   const saved=repository.read().categoryVisits;
@@ -232,7 +233,8 @@ function renderSwatches(){
     for(const color of PALETTE){
       const button=document.createElement('button');button.type='button';button.className='color-swatch';button.dataset.category=color.id;button.style.setProperty('--swatch',color.color);
       button.onclick=()=>{
-        if(categoryFor(selected.code)?.id!==color.id)assignCategory(color.id);
+        const isSelected=categoryFor(selected.code)?.id===color.id;
+        assignCategory(isSelected?null:color.id);
       };
       $('color-swatches').append(button);
     }
@@ -266,7 +268,101 @@ $('search').addEventListener('focus',openList);$('search').addEventListener('inp
 $('list-toggle').onclick=()=>{const open=$('results-panel').hidden;$('results-panel').hidden=!open;$('list-toggle').setAttribute('aria-expanded',String(open));renderList()};$('close-list').onclick=()=>{$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')};
 document.querySelectorAll('[data-filter]').forEach(button=>button.onclick=()=>{filter=button.dataset.filter;document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b===button));renderList()});
 $('about-button').onclick=()=>$('about').showModal();$('close-about').onclick=()=>$('about').close();
-window.addEventListener('storage',event=>{if(event.key===KEY||event.key===null){visits=repository.load();categories=repository.loadCategories();categoryVisits=loadCategoryVisits();loadCategoryForm();update()}});
+function reloadSettings(){
+  visits=repository.load();
+  categories=repository.loadCategories();
+  categoryVisits=loadCategoryVisits();
+  loadCategoryForm();
+  update();
+}
+window.addEventListener('storage',event=>{
+  if(event.key===KEY||event.key===null)reloadSettings();
+});
+
+const isRecord=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const paletteIds=new Set(PALETTE.map(({id})=>id));
+function parseSettingsBackup(text){
+  const backup=JSON.parse(text);
+  if(backup?.format!=='elsewhere-settings'||backup.version!==1||
+    !isRecord(backup.countries)||!isRecord(backup.categories)||!isRecord(backup.categoryVisits)){
+    throw new Error('Unsupported Elsewhere backup');
+  }
+  for(const [code,record] of Object.entries(backup.countries)){
+    if(!(COUNTRY_CODES.includes(code)||/^area:[^\r\n]{1,128}$/.test(code))||!isRecord(record)||
+      (Object.hasOwn(record,'categoryId')&&!paletteIds.has(record.categoryId))||
+      (Object.hasOwn(record,'visited')&&typeof record.visited!=='boolean')){
+      throw new Error('Invalid place record');
+    }
+  }
+  for(const [id,name] of Object.entries(backup.categories)){
+    if(!paletteIds.has(id)||typeof name!=='string'||!name.trim()||name.length>32)throw new Error('Invalid category name');
+  }
+  for(const [id,counts] of Object.entries(backup.categoryVisits)){
+    if(!paletteIds.has(id)||typeof counts!=='boolean')throw new Error('Invalid category rule');
+  }
+  const {version,countries,categories,categoryVisits}=backup;
+  return {version,countries,categories,categoryVisits};
+}
+
+let pendingSettings=null, settingsFileRequest=0;
+function settingsStatus(message){
+  $('settings-status').textContent=message;
+  $('settings-status').hidden=!message;
+}
+function clearPendingSettings(){
+  settingsFileRequest++;
+  pendingSettings=null;
+  $('settings-restore').hidden=true;
+  settingsStatus('');
+}
+$('settings-button').onclick=()=>{
+  clearPendingSettings();
+  $('settings').showModal();
+};
+$('close-settings').onclick=()=>$('settings').close();
+$('settings').addEventListener('close',clearPendingSettings);
+$('cancel-restore').onclick=clearPendingSettings;
+$('download-settings').onclick=()=>{
+  const backup={format:'elsewhere-settings',version:1,countries:visits,categories,categoryVisits};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));
+  const link=document.createElement('a');
+  link.href=url;
+  link.download='elsewhere-settings.json';
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+$('upload-settings').onclick=()=>$('settings-file').click();
+$('settings-file').onchange=async event=>{
+  const file=event.target.files[0];
+  event.target.value='';
+  if(!file)return;
+  clearPendingSettings();
+  const request=settingsFileRequest;
+  if(file.size>10*1024*1024){
+    settingsStatus('This backup is too large. Choose a JSON file under 10 MB.');
+    return;
+  }
+  try{
+    const backup=parseSettingsBackup(await file.text());
+    if(request!==settingsFileRequest||!$('settings').open)return;
+    pendingSettings=backup;
+    const count=Object.keys(backup.countries).length;
+    $('settings-preview').textContent=`This backup contains ${count} saved place ${count===1?'record':'records'}. Replacing settings overwrites this browser’s visits, colors, and categories.`;
+    $('settings-restore').hidden=false;
+  }catch{
+    if(request===settingsFileRequest)settingsStatus('Could not read this backup. Choose a valid Elsewhere settings JSON file.');
+  }
+};
+$('restore-settings').onclick=()=>{
+  if(!pendingSettings)return;
+  if(!repository.write(pendingSettings)){
+    settingsStatus('Could not save the backup to browser storage. Your current settings are still in use.');
+    return;
+  }
+  reloadSettings();
+  clearPendingSettings();
+  settingsStatus('Settings restored.');
+};
 // Keyboard motion uses elapsed time rather than OS key-repeat timing.
 const navigationKeys=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-']);
 const heldKeys=new Set();
@@ -305,7 +401,7 @@ function wheelZoom(event){
 }
 $('zoom-in').onclick=()=>scale(1.6);$('zoom-out').onclick=()=>scale(1/1.6);$('reset').onclick=reset;
 window.addEventListener('keydown',event=>{
-  if($('about').open||event.ctrlKey||event.metaKey||event.altKey)return;
+  if($('about').open||$('settings').open||event.ctrlKey||event.metaKey||event.altKey)return;
   if(event.key==='Escape'){stopNavigation();$('close-list').click();$('close-card').click();$('search').blur();return}
   if(event.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;
   if(event.key==='/'){event.preventDefault();stopNavigation();$('search').focus();return}
