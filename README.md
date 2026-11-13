@@ -43,3 +43,11 @@ The saved data retains existing visits until a place is reassigned, cleared, or 
 ## Territories and other areas
 
 All land features provided by the source dataset are selectable, including Puerto Rico, Greenland, disputed areas, and Antarctica. The initial world framing excludes Antarctica to preserve the existing view; search can focus it. Areas outside the country checklist use stable `area:<ADM0_A3>` keys in the same saved records. Existing country keys and selections are preserved. The compact counter adds an “other areas visited” line when needed, and category counts include all places.
+
+## US States
+
+Choose **States** next to Globe for an Albers USA map with Alaska and Hawaii insets. The footprint, search, list, category counts, and visited-only filter switch to the 50 states (excluding DC and territories). State assignments are independent of country assignments; category names, colors, and visit rules are shared. Visiting a state does not automatically mark the United States visited.
+
+State records use `state:<two-digit FIPS>` keys in the existing storage and settings backup. Existing country-only backups remain supported. Downloaded settings include both country and state records. Restoring a backup replaces all records, including state records.
+
+The state loader tries `assets/states.geojson` first (GeoJSON features with two-digit FIPS IDs and `properties.name`), then US Atlas 3.0.1 from jsDelivr and unpkg, decoded with TopoJSON Client 3.1.0. Sources: https://github.com/topojson/us-atlas and the US Census Bureau. A failed state-data load leaves the current view available and allows retrying.

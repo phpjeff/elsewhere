@@ -1,6 +1,9 @@
 /* Country geometry and visit records are separate so a future account repository
    and per-country photo renderer can replace local storage without changing IDs. */
 const COUNTRY_CODES = 'AF AL DZ AD AO AG AR AM AU AT AZ BS BH BD BB BY BE BZ BJ BT BO BA BW BR BN BG BF BI CV KH CM CA CF TD CL CN CO KM CG CD CR CI HR CU CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FJ FI FR GA GM GE DE GH GR GD GT GN GW GY HT HN HU IS IN ID IR IQ IE IL IT JM JP JO KZ KE KI KP KR KW KG LA LV LB LS LR LY LI LT LU MG MW MY MV ML MT MH MR MU MX FM MD MC MN ME MA MZ MM NA NR NP NL NZ NI NE NG MK NO OM PK PW PA PG PY PE PH PL PT QA RO RU RW KN LC VC WS SM ST SA SN RS SC SL SG SK SI SB SO ZA SS ES LK SD SR SE CH SY TJ TZ TH TL TG TO TT TN TR TM TV UG UA AE GB US UY UZ VU VE VN YE ZM ZW PS VA'.split(' ');
+// State IDs are FIPS codes, namespaced to avoid country-code collisions.
+const STATE_IDS=new Set('01 02 04 05 06 08 09 10 12 13 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 44 45 46 47 48 49 50 51 53 54 55 56'.split(' '));
+let worldFeatures=[],worldPlaces=[],stateFeatures=null,viewRequest=0;
 const KEY='elsewhere.visits.v1';
 const countryNames=new Intl.DisplayNames(['en'],{type:'region'});
 const PALETTE=[
@@ -83,7 +86,7 @@ function renderZoom(event){
   }else layer.attr('transform',transform);
   lastTransform=transform;
   $('tooltip').hidden=true;
-  document.querySelectorAll('.ocean-label').forEach(el=>el.style.opacity=viewMode==='globe'||transform.k>1.3?'0':'.7');
+  document.querySelectorAll('.ocean-label').forEach(el=>el.style.opacity=viewMode!=='map'||transform.k>1.3?'0':'.7');
 }
 function configureView(){
   stopNavigation();stopGlide();cancelAnimationFrame(drawingFrame);drawingFrame=0;
@@ -92,25 +95,72 @@ function configureView(){
   if(viewMode==='globe'){
     globeRadius=Math.max(60,Math.min(width*.43,height*.34));
     projection=d3.geoOrthographic().translate([width/2,height*.55]).scale(globeRadius).rotate(rotation).clipAngle(90);
+  }else if(viewMode==='states'){
+    projection=d3.geoAlbersUsa().fitExtent([[22,height*.28],[width-22,height*.86]],{type:'FeatureCollection',features});
   }else{
     projection=d3.geoNaturalEarth1().fitExtent([[22,height*.18],[width-22,height*.87]],{type:'FeatureCollection',features:features.filter(f=>f.properties.ADM0_A3!=='ATA')});
   }
   path.projection(projection);
   layer.select('.globe-ocean').style('display',viewMode==='globe'?null:'none');
-  layer.selectAll('path').attr('d',path);
+  layer.select('.graticule').style('display',viewMode==='states'?'none':null);
+  layer.selectAll('path').attr('d',d=>viewMode==='states'&&d.type!=='Feature'?null:path(d));
   zoom.extent([[0,0],[width,height]]).translateExtent(viewMode==='globe'?[[-Infinity,-Infinity],[Infinity,Infinity]]:[[-width*.5,-height*.5],[width*1.5,height*1.5]]);
   lastTransform=d3.zoomIdentity;
   svg.call(zoom.transform,d3.zoomIdentity);
 }
-function switchView(mode){
+async function loadStates(){
+  if(stateFeatures)return stateFeatures;
+  for(const url of ['assets/states.geojson','https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/states-10m.json','https://unpkg.com/us-atlas@3.0.1/states-10m.json']){
+    try{
+      const response=await fetch(url);
+      if(!response.ok)continue;
+      const data=await response.json();
+      const collection=data.type==='Topology'?topojson.feature(data,data.objects.states):data;
+      const result=collection.features.filter(f=>STATE_IDS.has(String(f.id).padStart(2,'0'))).map(f=>({...f,code:`state:${String(f.id).padStart(2,'0')}`,isState:true,properties:{...f.properties,CONTINENT:'UNITED STATES'}}));
+      if(result.length!==50||new Set(result.map(f=>f.code)).size!==50)continue;
+      stateFeatures=result;
+      return result;
+    }catch{}
+  }
+  throw new Error('State map unavailable');
+}
+async function switchView(mode){
+  const request=++viewRequest;
   if(!svg||mode===viewMode)return;
+  if(mode==='states'){
+    notify('Loading US states…');
+    try{await loadStates()}catch{if(request===viewRequest)notify('US states could not load. Check your connection and try again.');return}
+    if(request!==viewRequest)return;
+  }
+  const changingDataset=(mode==='states')!==(viewMode==='states');
   viewMode=mode;
+  if(changingDataset){
+    selected=null;$('country-card').hidden=true;$('tooltip').hidden=true;
+    $('search').value='';
+    features=mode==='states'?stateFeatures:worldFeatures;
+    places=mode==='states'?features.map(f=>({code:f.code,name:f.properties.name,isState:true})).sort((a,b)=>a.name.localeCompare(b.name)):worldPlaces;
+    renderFeatures();
+  }
   document.querySelectorAll('[data-view]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===mode)));
   document.body.classList.toggle('globe-view',mode==='globe');
+  document.body.classList.toggle('states-view',mode==='states');
+  const states=mode==='states';
+  $('search').placeholder=states?'Find a state…':'Find a place…';
+  $('list-title').textContent=states?'EXPLORE THE UNITED STATES':'EXPLORE THE WORLD';
+  $('focus-button').textContent=states?'Zoom to state ↗':'Zoom to country ↗';
+  $('reset').setAttribute('aria-label',states?'Show all US states':'Show whole world');
+  $('map').setAttribute('aria-label',`Interactive ${states?'US states':'world'} map. Arrow keys pan, plus and minus zoom, Home resets. Search to select ${states?'states':'countries'} with a keyboard.`);
+  $('country-card').setAttribute('aria-label',states?'Selected state':'Selected country');
+  $('close-card').setAttribute('aria-label',states?'Close state details':'Close country details');
+  $('close-list').setAttribute('aria-label',states?'Close state list':'Close country list');
+  $('category-filter').setAttribute('aria-label',`Filter ${states?'states':'countries'} by category`);
+  document.querySelector('.hint').textContent=`Drag to explore · Scroll to zoom · Click a ${states?'state':'country'} to begin`;
   configureView();
   if(mode==='globe')projection.rotate([-15,-20,0]);
   if(selected)focusCountry(selected);
   else if(mode==='globe')redrawGlobe();
+  update();
+  if(states)notify('Explore all 50 US states');
 }
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.view));
 $('visited-only').onclick=()=>{
@@ -188,7 +238,20 @@ window.addEventListener('touchstart',event=>{if(event.touches.length>1)dragEligi
 window.addEventListener('blur',stopGlide);
 document.addEventListener('visibilitychange',stopGlide);
 function notify(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2800)}
-function update(){const count=countries.filter(c=>visited(c.code)).length;$('count').textContent=count;const areas=places.filter(p=>p.isCountry===false&&visited(p.code)).length;$('area-count').textContent=areas?`+ ${areas} other ${areas===1?'area':'areas'} visited`:'';$('area-count').hidden=!areas;$('percent').textContent=`${Math.round(count/195*100)}% of the world`;$('progress').style.width=`${count/195*100}%`;if(paths)paths.classed('visited',d=>visited(d.code)).classed('selected',d=>d.code===selected?.code).classed('categorized',d=>!!categoryFor(d.code)).style('--country-color',d=>categoryFor(d.code)?.color||null);renderCategoryFilter();renderList();if(selected)renderCard()}
+function update(){
+  const states=viewMode==='states',total=states?50:195;
+  const count=(states?places:countries).filter(c=>visited(c.code)).length;
+  $('count').textContent=count;
+  document.querySelector('.denominator').textContent=` / ${total}`;
+  document.querySelector('.progress-caption').textContent=states?'states & counting':'countries & counting';
+  const areas=states?0:places.filter(p=>p.isCountry===false&&visited(p.code)).length;
+  $('area-count').textContent=areas?`+ ${areas} other ${areas===1?'area':'areas'} visited`:'';
+  $('area-count').hidden=!areas;
+  $('percent').textContent=`${Math.round(count/total*100)}% of ${states?'the US':'the world'}`;
+  $('progress').style.width=`${count/total*100}%`;
+  if(paths)paths.classed('visited',d=>visited(d.code)).classed('selected',d=>d.code===selected?.code).classed('categorized',d=>!!categoryFor(d.code)).style('--country-color',d=>categoryFor(d.code)?.color||null);
+  renderCategoryFilter();renderList();if(selected)renderCard();
+}
 function renderList(){const query=$('search').value.trim().toLowerCase();const matches=places.filter(c=>(filter!=='visited'||visited(c.code))&&(categoryFilter==='all'||(categoryFilter==='none'?!categoryFor(c.code):categoryFor(c.code)?.id===categoryFilter))&&(c.name.toLowerCase().includes(query)||c.code.toLowerCase()===query));$('results').replaceChildren();for(const country of matches){const button=document.createElement('button');button.className='result';const name=document.createElement('span');name.textContent=country.name;if(country.isCountry===false){const kind=document.createElement('span');kind.className='place-kind';kind.textContent='Territory / other area';name.append(kind)}const status=document.createElement('small');const category=categoryFor(country.code);status.textContent=(visited(country.code)?'✓ ':'')+(category?categories[category.id]:(visited(country.code)?'Visited':'↗'));if(category){status.className='category-badge';status.style.setProperty('--badge-color',category.color)}button.append(name,status);button.onclick=()=>{choose(country);$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false');focusCountry(country)};$('results').append(button)}if(!matches.length){const empty=document.createElement('div');empty.className='empty';empty.textContent=query?'No places found. Try another name.':'Your next adventure starts here.';$('results').append(empty)}}
 function choose(country){
   selected=country;
@@ -288,7 +351,7 @@ function parseSettingsBackup(text){
     throw new Error('Unsupported Elsewhere backup');
   }
   for(const [code,record] of Object.entries(backup.countries)){
-    if(!(COUNTRY_CODES.includes(code)||/^area:[^\r\n]{1,128}$/.test(code))||!isRecord(record)||
+    if(!(COUNTRY_CODES.includes(code)||(code.startsWith('state:')&&STATE_IDS.has(code.slice(6)))||/^area:[^\r\n]{1,128}$/.test(code))||!isRecord(record)||
       (Object.hasOwn(record,'categoryId')&&!paletteIds.has(record.categoryId))||
       (Object.hasOwn(record,'visited')&&typeof record.visited!=='boolean')){
       throw new Error('Invalid place record');
@@ -424,10 +487,13 @@ document.addEventListener('visibilitychange',stopNavigation);
 document.addEventListener('focusin',event=>{if(event.target.id!=='map')stopNavigation()});
 function focusCountry(country){stopNavigation();stopGlide();if(!svg)return;const feature=features.find(f=>f.code===country.code);if(!feature)return;if(viewMode==='globe'){focusGlobe(feature);return}const [[x0,y0],[x1,y1]]=path.bounds(feature);const k=Math.min(28,Math.max(1,Math.min(width*.58/(x1-x0||5),height*.58/(y1-y0||5))));svg.transition().duration(duration).call(zoom.transform,d3.zoomIdentity.translate(width/2,height/2).scale(k).translate(-(x0+x1)/2,-(y0+y1)/2))}
 async function loadData(){for(const url of ['assets/countries.geojson','https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson','https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson']){try{const response=await fetch(url);if(response.ok){const data=await response.json();if(data.type==='FeatureCollection')return data}}catch{}}throw new Error('Map data unavailable')}
+function renderFeatures(){
+paths=layer.selectAll('.country').data(features,d=>d.code).join('path').attr('class',d=>(d.isState||COUNTRY_CODES.includes(d.code))?'country':'country territory').attr('aria-label',d=>places.find(p=>p.code===d.code)?.name).on('click',(event,d)=>{choose(places.find(c=>c.code===d.code));$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')}).on('mousemove',(event,d)=>{const name=places.find(c=>c.code===d.code)?.name;$('tooltip').textContent=name+(visited(d.code)?' · Visited':'')+(categoryFor(d.code)?` · ${categories[categoryFor(d.code).id]}`:'');$('tooltip').hidden=false;$('tooltip').style.left=Math.min(event.clientX+14,width-180)+'px';$('tooltip').style.top=Math.min(event.clientY+16,height-45)+'px'}).on('mouseleave',()=>$('tooltip').hidden=true);
+}
 async function init(){update();try{if(!window.d3)throw new Error('Map library unavailable');const data=await loadData();features=data.features.map(normalizeFeature);
 // Very small states absent from generalized polygons remain visible and selectable.
 const tiny={VA:[12.4534,41.9029],MC:[7.4246,43.7384],NR:[166.9315,-.5228],TV:[179.194,-8.5211]};for(const [code,coordinates] of Object.entries(tiny)){if(!features.some(f=>f.code===code))features.push({type:'Feature',code,properties:{CONTINENT:'SMALL STATES'},geometry:{type:'Point',coordinates}})}
-places=buildPlaces(features);
-svg=d3.select('#map');layer=svg.append('g');projection=d3.geoNaturalEarth1();path=d3.geoPath(projection).pointRadius(2);zoom=d3.zoom().scaleExtent([1,35]).clickDistance(6).on('start.inertia',startDrag).on('end.inertia',releaseDrag).on('zoom',renderZoom);svg.call(zoom).on('wheel.zoom',null).on('wheel.smooth',wheelZoom,{passive:false});layer.append('path').datum({type:'Sphere'}).attr('class','globe-ocean');layer.append('path').datum(d3.geoGraticule10()).attr('class','graticule');paths=layer.selectAll('.country').data(features).join('path').attr('class',d=>COUNTRY_CODES.includes(d.code)?'country':'country territory').attr('aria-label',d=>places.find(p=>p.code===d.code)?.name).on('click',(event,d)=>{choose(places.find(c=>c.code===d.code));$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')}).on('mousemove',(event,d)=>{const name=places.find(c=>c.code===d.code)?.name;$('tooltip').textContent=name+(visited(d.code)?' · Visited':'')+(categoryFor(d.code)?` · ${categories[categoryFor(d.code).id]}`:'');$('tooltip').hidden=false;$('tooltip').style.left=Math.min(event.clientX+14,width-180)+'px';$('tooltip').style.top=Math.min(event.clientY+16,height-45)+'px'}).on('mouseleave',()=>$('tooltip').hidden=true);
+places=buildPlaces(features);worldFeatures=features;worldPlaces=places;
+svg=d3.select('#map');layer=svg.append('g');projection=d3.geoNaturalEarth1();path=d3.geoPath(projection).pointRadius(2);zoom=d3.zoom().scaleExtent([1,35]).clickDistance(6).on('start.inertia',startDrag).on('end.inertia',releaseDrag).on('zoom',renderZoom);svg.call(zoom).on('wheel.zoom',null).on('wheel.smooth',wheelZoom,{passive:false});layer.append('path').datum({type:'Sphere'}).attr('class','globe-ocean');layer.append('path').datum(d3.geoGraticule10()).attr('class','graticule');renderFeatures();
 configureView();window.addEventListener('resize',configureView);$('loading').hidden=true;document.querySelectorAll('[data-view]').forEach(button=>button.disabled=false);$('visited-only').disabled=false;update();const missing=countries.filter(c=>!features.some(f=>f.code===c.code));if(missing.length)console.warn('Search-only countries:',missing.map(c=>c.name));}catch(error){$('loading').textContent='The map couldn’t load. Check your internet connection and refresh. Your country checklist is still available through search.';console.error(error)}}
 init();
