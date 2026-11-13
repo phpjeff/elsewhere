@@ -16,7 +16,7 @@ An internet connection is required for D3, fonts, and Natural Earth GeoJSON. The
 
 ## Interaction
 
-- Click a country, then choose **Mark as visited**. The same button removes a visit.
+- Click a country, choose a color, and save its category with **Counts as visited** enabled.
 - Drag or swipe to pan; scroll or pinch to zoom. Double-click also zooms.
 - Use + / − to zoom, arrow keys to pan, Home to reset, / to search, Escape to close panels.
 - Search and the country list provide keyboard access and access to microstates.
@@ -26,7 +26,7 @@ Natural Earth uses de facto border conventions. Boundaries and recognition can b
 
 ## Persistence and extensions
 
-The `elsewhere.visits.v1` localStorage record contains a version and country records keyed by stable ISO alpha-2 codes. Each record stores `visited`, `updatedAt`, and a reserved `photo` field. The repository adapter in `app.js` is the replacement point for future authenticated API storage. Visit state is independent of geometry. Future photos can use SVG clip paths or patterns keyed to the same country IDs, with uploads stored outside localStorage.
+The `elsewhere.visits.v1` localStorage record contains a version and country records keyed by stable ISO alpha-2 codes. Place records store their category ID and update time. Older records may include a standalone visit flag or a reserved photo field. The repository adapter in `app.js` is the replacement point for future authenticated API storage. Visit state is independent of geometry. Future photos can use SVG clip paths or patterns keyed to the same country IDs, with uploads stored outside localStorage.
 
 Selections are specific to a browser and origin; clearing browser data removes them. Storage failures display a message instead of silently claiming a save. Changes synchronize between tabs on the same origin.
 
@@ -36,10 +36,9 @@ Selections are specific to a browser and origin; clearing browser data removes t
 
 ## Color categories
 
-Each country can have one of ten muted palette colors, independently of whether it is visited. Select a country, choose a swatch, and use **Category name → Save** to rename that color's category everywhere. **Clear** removes only the category assignment. The country list includes a category dropdown with counts and can combine category, visited, and search filters.
+Select a place and choose one of ten colors. Edit **Category name** and **Counts as visited**, then select **Save**. Both settings apply to every place using the color, and the totals and Visited filter update together. **Clear** removes the place’s category and visit.
 
-Category names are stored alongside the existing countries in the version-1 localStorage record; country records reference a stable `categoryId`. Existing visit records remain compatible and keep their original teal fill until a category is assigned. Assignments, shared renaming, category filtering, refresh persistence, and clearing were verified in the browser without changing the existing visited count.
-
+The saved data retains existing visits until a place is reassigned, cleared, or its category’s settings are saved. New color assignments count as visits once their category has **Counts as visited** enabled.
 
 ## Territories and other areas
 

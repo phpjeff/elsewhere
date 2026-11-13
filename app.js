@@ -19,9 +19,14 @@ const repository={
   read(){try{const raw=JSON.parse(localStorage.getItem(KEY)||'{}');return raw?.version===1?raw:{}}catch{return {}}},
   load(){const value=this.read().countries;return value&&typeof value==='object'&&!Array.isArray(value)?value:{}},
   loadCategories(){const names=this.read().categories;return Object.fromEntries(PALETTE.map(p=>[p.id,typeof names?.[p.id]==='string'&&names[p.id].trim()?names[p.id].trim().slice(0,32):p.name]))},
-  save(countries){try{localStorage.setItem(KEY,JSON.stringify({version:1,countries,categories}));return true}catch{return false}}
+  save(countries){try{localStorage.setItem(KEY,JSON.stringify({version:1,countries,categories,categoryVisits}));return true}catch{return false}}
 };
-let categories=repository.loadCategories(),categoryFilter='all';
+function loadCategoryVisits(){
+  const saved=repository.read().categoryVisits;
+  return Object.fromEntries(PALETTE.filter(({id})=>typeof saved?.[id]==='boolean')
+    .map(({id})=>[id,saved[id]]));
+}
+let categories=repository.loadCategories(),categoryVisits=loadCategoryVisits(),categoryFilter='all';
 function categoryFor(code){return PALETTE.find(p=>p.id===visits[code]?.categoryId)}
 function saveChanges(message){const saved=repository.save(visits);update();notify(saved?message:'Browser storage unavailable. Changes last only this session.')}
 let visits=repository.load(),selected=null,filter='all',features=[],paths,projection,path,zoom,svg,layer,width,height,toastTimer;
@@ -44,7 +49,11 @@ function buildPlaces(mapFeatures){
   }
   return [...entries.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
-const visited=code=>!!visits[code]?.visited;
+function visited(code){
+  const category=categoryFor(code);
+  // Keep older visits until their color gets a rule or the place is reassigned.
+  return (category && categoryVisits[category.id]) ?? !!visits[code]?.visited;
+}
 let viewMode='map', globeRadius=1, lastTransform, drawingFrame=0, programmaticPan=false;
 function redrawGlobe(){
   if(drawingFrame)return;
@@ -103,6 +112,13 @@ function switchView(mode){
   else if(mode==='globe')redrawGlobe();
 }
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.view));
+$('visited-only').onclick=()=>{
+  const button=$('visited-only');
+  const enabled=button.getAttribute('aria-checked')!=='true';
+  button.setAttribute('aria-checked',String(enabled));
+  $('map').classList.toggle('visited-only',enabled);
+  $('tooltip').hidden=true;
+};
 function focusGlobe(feature){
   const center=d3.geoCentroid(feature);
   const start=projection.rotate();
@@ -173,9 +189,36 @@ document.addEventListener('visibilitychange',stopGlide);
 function notify(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2800)}
 function update(){const count=countries.filter(c=>visited(c.code)).length;$('count').textContent=count;const areas=places.filter(p=>p.isCountry===false&&visited(p.code)).length;$('area-count').textContent=areas?`+ ${areas} other ${areas===1?'area':'areas'} visited`:'';$('area-count').hidden=!areas;$('percent').textContent=`${Math.round(count/195*100)}% of the world`;$('progress').style.width=`${count/195*100}%`;if(paths)paths.classed('visited',d=>visited(d.code)).classed('selected',d=>d.code===selected?.code).classed('categorized',d=>!!categoryFor(d.code)).style('--country-color',d=>categoryFor(d.code)?.color||null);renderCategoryFilter();renderList();if(selected)renderCard()}
 function renderList(){const query=$('search').value.trim().toLowerCase();const matches=places.filter(c=>(filter!=='visited'||visited(c.code))&&(categoryFilter==='all'||(categoryFilter==='none'?!categoryFor(c.code):categoryFor(c.code)?.id===categoryFilter))&&(c.name.toLowerCase().includes(query)||c.code.toLowerCase()===query));$('results').replaceChildren();for(const country of matches){const button=document.createElement('button');button.className='result';const name=document.createElement('span');name.textContent=country.name;if(country.isCountry===false){const kind=document.createElement('span');kind.className='place-kind';kind.textContent='Territory / other area';name.append(kind)}const status=document.createElement('small');const category=categoryFor(country.code);status.textContent=(visited(country.code)?'✓ ':'')+(category?categories[category.id]:(visited(country.code)?'Visited':'↗'));if(category){status.className='category-badge';status.style.setProperty('--badge-color',category.color)}button.append(name,status);button.onclick=()=>{choose(country);$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false');focusCountry(country)};$('results').append(button)}if(!matches.length){const empty=document.createElement('div');empty.className='empty';empty.textContent=query?'No places found. Try another name.':'Your next adventure starts here.';$('results').append(empty)}}
-function choose(country){selected=country;$('country-card').hidden=false;update();$('category-name').value=categoryFor(country.code)?categories[categoryFor(country.code).id]:''}
-function renderCard(){const feature=features.find(f=>f.code===selected.code);$('country-name').textContent=selected.name;$('region').textContent=feature?.properties.CONTINENT||'YOUR TRAVEL JOURNAL';$('country-status').textContent=visited(selected.code)?'A little more of the world, made yours.':'Every place has a story. Make this one yours.';$('place-note').hidden=selected.isCountry!==false;$('place-note').textContent='Territory / other area · saved separately from the 195-country count.';$('visit-button').textContent=visited(selected.code)?'✓ Visited · Mark unvisited':'+ Mark as visited';renderSwatches()}
-$('visit-button').onclick=()=>{if(!selected)return;const now=!visited(selected.code);visits[selected.code]={...visits[selected.code],visited:now,updatedAt:new Date().toISOString(),photo:visits[selected.code]?.photo||null};const saved=repository.save(visits);update();notify(saved?(now?`${selected.name} added to your world`:`${selected.name} removed`):'Browser storage unavailable. Changes last only this session.')};
+function choose(country){
+  selected=country;
+  $('country-card').hidden=false;
+  loadCategoryForm();
+  update();
+}
+function renderCard(){
+  const feature=features.find(f=>f.code===selected.code);
+  $('country-name').textContent=selected.name;
+  $('region').textContent=feature?.properties.CONTINENT||'YOUR TRAVEL JOURNAL';
+  $('country-status').textContent=visited(selected.code)?'✓ Visited':'Unvisited';
+  $('place-note').hidden=selected.isCountry!==false;
+  $('place-note').textContent='Territory / other area · saved separately from the 195-country count.';
+  renderSwatches();
+}
+function loadCategoryForm(){
+  const active=categoryFor(selected?.code);
+  $('category-name').setCustomValidity('');
+  $('category-name').value=active?categories[active.id]:'';
+  $('category-counts-as-visited').checked=active?categoryVisits[active.id]===true:false;
+}
+function assignCategory(categoryId){
+  const record={...visits[selected.code],updatedAt:new Date().toISOString()};
+  delete record.visited;
+  if(categoryId)record.categoryId=categoryId;
+  else delete record.categoryId;
+  visits[selected.code]=record;
+  loadCategoryForm();
+  saveChanges(categoryId?`${selected.name} grouped as ${categories[categoryId]}`:`Color and visit cleared for ${selected.name}`);
+}
 function renderCategoryFilter(){
   const select=$('category-filter');select.replaceChildren();
   const options=[['all','All categories'],['none','No category'],...PALETTE.map(p=>[p.id,`${categories[p.id]} (${places.filter(c=>categoryFor(c.code)?.id===p.id).length})`])];
@@ -189,16 +232,19 @@ function renderSwatches(){
     for(const color of PALETTE){
       const button=document.createElement('button');button.type='button';button.className='color-swatch';button.dataset.category=color.id;button.style.setProperty('--swatch',color.color);
       button.onclick=()=>{
-        visits[selected.code]={...visits[selected.code],categoryId:color.id,updatedAt:new Date().toISOString()};
-        $('category-name').value=categories[color.id];saveChanges(`${selected.name} grouped as ${categories[color.id]}`);
+        if(categoryFor(selected.code)?.id!==color.id)assignCategory(color.id);
       };
       $('color-swatches').append(button);
     }
   }
   for(const button of $('color-swatches').children){const color=PALETTE.find(p=>p.id===button.dataset.category);const checked=active?.id===color.id;button.setAttribute('aria-pressed',String(checked));button.setAttribute('aria-label',`${color.name}: ${categories[color.id]}`);button.title=categories[color.id];button.textContent=checked?'✓':''}
-  $('category-form').hidden=!active;$('clear-category').disabled=!active;
-  if(active&&document.activeElement!==$('category-name'))$('category-name').value=categories[active.id];
-  $('category-summary').textContent=active?`Group: ${categories[active.id]}. Visits are tracked separately.`:'Choose a color to group this country. Visits are tracked separately.';
+  $('category-form').hidden=!active;
+  const isVisited=visited(selected.code);
+  $('clear-category').disabled=!active&&!isVisited;
+  $('clear-category').textContent=active?'Clear':'Clear visit';
+  $('category-summary').textContent=active
+    ? `Group: ${categories[active.id]}`
+    : isVisited?'Choose a color to set how this place counts.':'Choose a color to assign a category.';
 }
 $('category-filter').onchange=event=>{categoryFilter=event.target.value;renderList()};
 $('category-form').onsubmit=event=>{
@@ -206,10 +252,13 @@ $('category-form').onsubmit=event=>{
   const category=categoryFor(selected.code),name=$('category-name').value.trim();
   if(!category)return;
   if(!name){$('category-name').setCustomValidity('Enter a category name.');$('category-name').reportValidity();return}
-  categories[category.id]=name.slice(0,32);saveChanges('Category renamed for all countries using this color');
+  categories[category.id]=name.slice(0,32);
+  categoryVisits[category.id]=$('category-counts-as-visited').checked;
+  loadCategoryForm();
+  saveChanges('Category updated for all places using this color');
 };
 $('category-name').addEventListener('input',()=>$('category-name').setCustomValidity(''));
-$('clear-category').onclick=()=>{if(!selected)return;const record={...visits[selected.code],updatedAt:new Date().toISOString()};delete record.categoryId;visits[selected.code]=record;saveChanges(`Color cleared for ${selected.name}`)};
+$('clear-category').onclick=()=>{if(selected)assignCategory(null)};
 $('focus-button').onclick=()=>focusCountry(selected);
 $('close-card').onclick=()=>{selected=null;$('country-card').hidden=true;update()};
 function openList(){ $('results-panel').hidden=false;$('list-toggle').setAttribute('aria-expanded','true');renderList() }
@@ -217,7 +266,7 @@ $('search').addEventListener('focus',openList);$('search').addEventListener('inp
 $('list-toggle').onclick=()=>{const open=$('results-panel').hidden;$('results-panel').hidden=!open;$('list-toggle').setAttribute('aria-expanded',String(open));renderList()};$('close-list').onclick=()=>{$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')};
 document.querySelectorAll('[data-filter]').forEach(button=>button.onclick=()=>{filter=button.dataset.filter;document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b===button));renderList()});
 $('about-button').onclick=()=>$('about').showModal();$('close-about').onclick=()=>$('about').close();
-window.addEventListener('storage',event=>{if(event.key===KEY||event.key===null){visits=repository.load();categories=repository.loadCategories();update()}});
+window.addEventListener('storage',event=>{if(event.key===KEY||event.key===null){visits=repository.load();categories=repository.loadCategories();categoryVisits=loadCategoryVisits();loadCategoryForm();update()}});
 // Keyboard motion uses elapsed time rather than OS key-repeat timing.
 const navigationKeys=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-']);
 const heldKeys=new Set();
@@ -284,5 +333,5 @@ async function init(){update();try{if(!window.d3)throw new Error('Map library un
 const tiny={VA:[12.4534,41.9029],MC:[7.4246,43.7384],NR:[166.9315,-.5228],TV:[179.194,-8.5211]};for(const [code,coordinates] of Object.entries(tiny)){if(!features.some(f=>f.code===code))features.push({type:'Feature',code,properties:{CONTINENT:'SMALL STATES'},geometry:{type:'Point',coordinates}})}
 places=buildPlaces(features);
 svg=d3.select('#map');layer=svg.append('g');projection=d3.geoNaturalEarth1();path=d3.geoPath(projection).pointRadius(2);zoom=d3.zoom().scaleExtent([1,35]).clickDistance(6).on('start.inertia',startDrag).on('end.inertia',releaseDrag).on('zoom',renderZoom);svg.call(zoom).on('wheel.zoom',null).on('wheel.smooth',wheelZoom,{passive:false});layer.append('path').datum({type:'Sphere'}).attr('class','globe-ocean');layer.append('path').datum(d3.geoGraticule10()).attr('class','graticule');paths=layer.selectAll('.country').data(features).join('path').attr('class',d=>COUNTRY_CODES.includes(d.code)?'country':'country territory').attr('aria-label',d=>places.find(p=>p.code===d.code)?.name).on('click',(event,d)=>{choose(places.find(c=>c.code===d.code));$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')}).on('mousemove',(event,d)=>{const name=places.find(c=>c.code===d.code)?.name;$('tooltip').textContent=name+(visited(d.code)?' · Visited':'')+(categoryFor(d.code)?` · ${categories[categoryFor(d.code).id]}`:'');$('tooltip').hidden=false;$('tooltip').style.left=Math.min(event.clientX+14,width-180)+'px';$('tooltip').style.top=Math.min(event.clientY+16,height-45)+'px'}).on('mouseleave',()=>$('tooltip').hidden=true);
-configureView();window.addEventListener('resize',configureView);$('loading').hidden=true;document.querySelectorAll('[data-view]').forEach(button=>button.disabled=false);update();const missing=countries.filter(c=>!features.some(f=>f.code===c.code));if(missing.length)console.warn('Search-only countries:',missing.map(c=>c.name));}catch(error){$('loading').textContent='The map couldn’t load. Check your internet connection and refresh. Your country checklist is still available through search.';console.error(error)}}
+configureView();window.addEventListener('resize',configureView);$('loading').hidden=true;document.querySelectorAll('[data-view]').forEach(button=>button.disabled=false);$('visited-only').disabled=false;update();const missing=countries.filter(c=>!features.some(f=>f.code===c.code));if(missing.length)console.warn('Search-only countries:',missing.map(c=>c.name));}catch(error){$('loading').textContent='The map couldn’t load. Check your internet connection and refresh. Your country checklist is still available through search.';console.error(error)}}
 init();

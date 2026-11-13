@@ -31,9 +31,23 @@
 .place-kind{display:block;font-size:9px;color:#8a9586;margin-top:4px;font-weight:400}
 #area-count{font-size:10px;color:#64816f;margin-top:8px}
 #place-note{margin:0 0 12px}
-.view-switch{position:absolute;top:35px;left:50%;transform:translateX(-50%);display:flex;gap:3px;padding:4px;border:1px solid #fff;border-radius:10px;background:#fffefaec;box-shadow:0 4px 20px #283e3b08}
+.view-controls{position:absolute;top:35px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px}
+.view-switch{display:flex;gap:3px;padding:4px;border:1px solid #fff;border-radius:10px;background:#fffefaec;box-shadow:0 4px 20px #283e3b08}
 .view-switch button{padding:9px 19px;border-radius:7px;font-size:12px;color:#738174}
 .view-switch button[aria-pressed="true"]{background:#386e5b;color:white}
 .globe-ocean{fill:#ecf0e7;stroke:#a6baaa;stroke-width:1;filter:drop-shadow(0 9px 12px #294e4018)}
 .globe-view .graticule{stroke-opacity:.24}
-@media(max-width:700px){.view-switch{top:169px;left:20px;transform:none}.view-switch button{padding:8px 16px}}
+@media(max-width:700px){.view-controls{top:169px;left:20px;transform:none}.view-switch button{padding:8px 16px}}
+
+#category-form .category-visit-setting{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:11px}
+.category-visit-setting input{width:auto;margin:0;accent-color:#386e5b}
+
+.visit-switch{display:inline-flex;align-items:center;gap:7px;padding:9px 10px;font-size:12px;white-space:nowrap;color:#4b6052}
+.visit-switch-track{position:relative;width:28px;height:16px;border-radius:999px;background:#858f82}
+.visit-switch-track::after{content:"";position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:#fffefa}
+.visit-switch[aria-checked="true"] .visit-switch-track{background:#386e5b}
+.visit-switch[aria-checked="true"] .visit-switch-track::after{transform:translateX(12px)}
+.visit-switch:disabled{opacity:.55;cursor:default}
+#map.visited-only .country.categorized:not(.visited){fill:#e3e4d8;stroke:#a9b8ac}
+#map.visited-only .country.territory.categorized:not(.visited){fill:#e7e6dc;stroke:#b6bfb2}
+#map.visited-only .country.categorized:not(.visited):is(:hover,.selected){fill:#cfdbcc;stroke:#547d6d}
