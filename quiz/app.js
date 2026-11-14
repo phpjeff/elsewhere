@@ -114,14 +114,14 @@ async function switchView(mode){
   document.body.classList.toggle('states-view',mode==='states');
   const states=mode==='states';
   $('list-title').textContent=states?'EXPLORE THE UNITED STATES':'EXPLORE THE WORLD';
-  $('focus-button').textContent=states?'Zoom to state ↗':'Zoom to country ↗';
+  $('focus-button').textContent=states?'Zoom to state ↗':'Zoom to place ↗';
   $('reset').setAttribute('aria-label',states?'Show all US states':'Show whole world');
-  $('map').setAttribute('aria-label',`Interactive ${states?'US states':'world'} map. Arrow keys pan, plus and minus zoom, Home resets. Search to select ${states?'states':'countries'} with a keyboard.`);
-  $('country-card').setAttribute('aria-label',states?'Selected state':'Selected country');
-  $('close-card').setAttribute('aria-label',states?'Close state details':'Close country details');
-  $('close-list').setAttribute('aria-label',states?'Close state list':'Close country list');
+  $('map').setAttribute('aria-label',`Interactive ${states?'US states':'world'} map. Arrow keys pan, plus and minus zoom, Home resets. Search to select ${states?'states':'countries and territories'} with a keyboard.`);
+  $('country-card').setAttribute('aria-label',states?'Selected state':'Selected place');
+  $('close-card').setAttribute('aria-label',states?'Close state details':'Close place details');
+  $('close-list').setAttribute('aria-label',states?'Close state list':'Close place list');
   
-  document.querySelector('.hint').textContent=`Drag to explore · Scroll to zoom · Click a ${states?'state':'country'} to begin`;
+  document.querySelector('.hint').textContent=`Drag to explore · Scroll to zoom · Click a ${states?'state':'place'} to begin`;
   configureView();
   if(mode==='globe')projection.rotate([-15,-20,0]);
   if(selected)focusCountry(selected);
@@ -208,10 +208,10 @@ function correct(place){return [place.name,...(aliases[place.code]||[])].some(na
 function persist(){try{localStorage.setItem(QUIZ_KEY,JSON.stringify({version:1,answers,graded}))}catch{notify('Browser storage unavailable; answers last only this session.')}}
 function revealed(place){return learning?(learnAll||selected?.code===place.code):(graded[dataset()]&&!!answers[place.code])}
 function update(){
- const active=places.filter(p=>p.isState||p.isCountry!==false),entered=active.filter(p=>answers[p.code]),isGraded=graded[dataset()],right=entered.filter(correct).length;
+ const active=places,entered=active.filter(p=>answers[p.code]),isGraded=graded[dataset()],right=entered.filter(correct).length;
  $('count').textContent=isGraded&&!learning?right:entered.length;
  document.querySelector('.denominator').textContent=` / ${isGraded&&!learning?entered.length:active.length}`;
- document.querySelector('.progress-caption').textContent=isGraded&&!learning?'correct answers':`${viewMode==='states'?'states':'countries'} answered`;
+ document.querySelector('.progress-caption').textContent=isGraded&&!learning?'correct answers':`${viewMode==='states'?'states':'places'} answered`;
  $('percent').textContent=isGraded&&!learning?`${entered.length?Math.round(right/entered.length*100):0}% correct · ${active.length-entered.length} blank`:`${active.length-entered.length} still blank`;
  $('progress').style.width=`${(isGraded&&!learning?right:entered.length)/active.length*100||0}%`;
  $('grade').disabled=learning||!entered.length;
@@ -221,7 +221,7 @@ function update(){
  const canSearch=learning&&learnAll;
  $('search-wrap').hidden=!canSearch;
  if(!canSearch)$('search').value='';
- if(paths)paths.classed('selected',d=>d.code===selected?.code).style('fill',d=>learning?null:answers[d.code]?(isGraded?(correct(places.find(p=>p.code===d.code))?'#4d8a78':'#b77e83'):'#c49b53'):null).attr('aria-label',d=>{const p=places.find(p=>p.code===d.code);return revealed(p)?p.name:`Unnamed ${viewMode==='states'?'state':'country'} ${active.findIndex(p=>p.code===d.code)+1}`});
+ if(paths)paths.classed('selected',d=>d.code===selected?.code).style('fill',d=>learning?null:answers[d.code]?(isGraded?(correct(places.find(p=>p.code===d.code))?'#4d8a78':'#b77e83'):'#c49b53'):null).attr('aria-label',d=>{const p=places.find(p=>p.code===d.code);return revealed(p)?p.name:`Unnamed ${viewMode==='states'?'state':'place'} ${active.findIndex(p=>p.code===d.code)+1}`});
  renderLabels();renderList();if(selected)renderCard();
 }
 function labelPosition(feature){
@@ -262,14 +262,14 @@ function renderLabels(){
 }
 function choose(place){if(!place)return;selected=place;$('country-card').hidden=false;$('answer').value=answers[place.code]||'';update();if(!learning)$('answer').focus()}
 function renderCard(){
- $('country-name').textContent=revealed(selected)?selected.name:`Name this ${viewMode==='states'?'state':'country'}`;
+ $('country-name').textContent=revealed(selected)?selected.name:`Name this ${viewMode==='states'?'state':'place'}`;
  $('region').textContent=learning?'LEARN & EXPLORE':'YOUR GEOGRAPHY QUIZ';
  $('country-status').textContent=learning?(learnAll?'All names are visible.':'Select a place to reveal its name.'):graded[dataset()]&&answers[selected.code]?`${correct(selected)?'✓ Correct':'✕ Incorrect'} · Your answer: ${answers[selected.code]}`:'Enter a name, then save your answer. Grade whenever you’re ready.';
  $('answer-form').hidden=learning;$('clear-answer').disabled=!answers[selected.code];
 }
 function renderList(){
  const query=$('search').value.trim().toLowerCase();$('results').replaceChildren();
- places.filter(p=>p.isCountry!==false).forEach((p,i)=>{const name=revealed(p)?p.name:answers[p.code]||`Unnamed ${viewMode==='states'?'state':'country'} ${i+1}`;if(!name.toLowerCase().includes(query))return;const b=document.createElement('button');b.className='result';b.textContent=name;b.onclick=()=>{choose(p);$('results-panel').hidden=true;focusCountry(p)};$('results').append(b)});
+ places.forEach((p,i)=>{const name=revealed(p)?p.name:answers[p.code]||`Unnamed ${viewMode==='states'?'state':'place'} ${i+1}`;if(!name.toLowerCase().includes(query))return;const b=document.createElement('button');b.className='result';b.textContent=name;b.onclick=()=>{choose(p);$('results-panel').hidden=true;focusCountry(p)};$('results').append(b)});
 }
 $('answer-form').onsubmit=event=>{
   event.preventDefault();
@@ -287,7 +287,7 @@ $('grade').onclick=()=>{graded[dataset()]=true;persist();update();notify('Graded
 $('learn-all').onclick=()=>{learning=true;learnAll=true;update()};
 $('learn-click').onclick=()=>{learning=true;learnAll=false;update()};
 $('quiz-mode').onclick=()=>{learning=false;update()};
-$('new-quiz').onclick=()=>{if(!confirm(`Clear answers for ${viewMode==='states'?'US states':'countries'} and start again?`))return;for(const p of places)delete answers[p.code];graded[dataset()]=false;$('answer').value='';persist();update()};
+$('new-quiz').onclick=()=>{if(!confirm(`Clear answers for ${viewMode==='states'?'US states':'countries and territories'} and start again?`))return;for(const p of places)delete answers[p.code];graded[dataset()]=false;$('answer').value='';persist();update()};
 $('focus-button').onclick=()=>focusCountry(selected);
 function closeCard(){selected=null;$('country-card').hidden=true;update()}
 $('close-card').onclick=closeCard;
@@ -360,7 +360,7 @@ async function loadData(){for(const url of ['../assets/countries.geojson','https
 function renderFeatures(){
 paths=layer.selectAll('.country').data(features,d=>d.code).join('path').attr('class','country').attr('tabindex',0).attr('role','button').on('click',(event,d)=>choose(places.find(c=>c.code===d.code))).on('keydown',(event,d)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();choose(places.find(c=>c.code===d.code))}});
 }
-async function init(){update();try{if(!window.d3)throw new Error('Map library unavailable');const data=await loadData();features=data.features.map(normalizeFeature).filter(f=>f.isCountry);
+async function init(){update();try{if(!window.d3)throw new Error('Map library unavailable');const data=await loadData();features=data.features.map(normalizeFeature);
 // Very small states absent from generalized polygons remain visible and selectable.
 const tiny={VA:[12.4534,41.9029],MC:[7.4246,43.7384],NR:[166.9315,-.5228],TV:[179.194,-8.5211]};for(const [code,coordinates] of Object.entries(tiny)){if(!features.some(f=>f.code===code))features.push({type:'Feature',code,properties:{CONTINENT:'SMALL STATES'},geometry:{type:'Point',coordinates}})}
 places=buildPlaces(features);worldFeatures=features;worldPlaces=places;
