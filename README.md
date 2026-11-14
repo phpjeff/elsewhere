@@ -51,3 +51,9 @@ Choose **States** next to Globe for an Albers USA map with Alaska and Hawaii ins
 State records use `state:<two-digit FIPS>` keys in the existing storage and settings backup. Existing country-only backups remain supported. Downloaded settings include both country and state records. Restoring a backup replaces all records, including state records.
 
 The state loader tries `assets/states.geojson` first (GeoJSON features with two-digit FIPS IDs and `properties.name`), then US Atlas 3.0.1 from jsDelivr and unpkg, decoded with TopoJSON Client 3.1.0. Sources: https://github.com/topojson/us-atlas and the US Census Bureau. A failed state-data load leaves the current view available and allows retrying.
+
+## Geography quiz
+
+Open `/quiz/` for the separate quiz. Map and Globe share country answers; States has its own answers. Save answers to color places ochre, then Grade for fern green (correct) and dusty rose (incorrect). Only answered places receive labels after grading. Editing clears the active dataset’s grade.
+
+Choose Show All to display every name or Click to Show to reveal names on selection. Quiz returns to answer entry. Zoom to separate dense labels. Grading ignores case, accents, spaces and punctuation, and accepts common country aliases. Answers persist independently in `elsewhere.quiz.v1`. Start over clears only the active dataset.
