@@ -61,3 +61,132 @@
 .states-view .ocean-label{display:none}
 @media(min-width:701px) and (max-width:1100px){.view-controls{top:100px}}
 @media(max-width:400px){.view-controls{gap:3px}.view-switch button{padding:8px 12px}.visit-switch{font-size:11px;padding:9px 4px}}
+
+/* A compact shared card for the mobile travel controls and footprint. */
+.travel-dashboard {
+  display: contents;
+}
+
+@media (max-width: 700px) {
+  .travel-dashboard {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top));
+    left: 8px;
+    right: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 12px;
+    border: 1px solid white;
+    border-radius: 14px;
+    background: #fffefa;
+    box-shadow: 0 8px 35px #324a3410;
+    z-index: 2;
+  }
+  .travel-dashboard header,
+  .travel-dashboard .view-controls,
+  .travel-dashboard .progress-card,
+  .travel-dashboard .explorer {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    transform: none;
+  }
+  .travel-dashboard .brand {
+    justify-content: center;
+    font-size: 18px;
+    letter-spacing: -.7px;
+    gap: 6px;
+  }
+  .travel-dashboard .brand-icon {
+    font-size: 22px;
+  }
+  .travel-dashboard .brand-dot {
+    margin-left: -6px;
+  }
+  .travel-dashboard .tagline,
+  .travel-dashboard .progress-card > .eyebrow {
+    display: none;
+  }
+  .travel-dashboard .view-controls {
+    display: flex;
+    gap: 6px;
+  }
+  .travel-dashboard .view-switch {
+    flex: 1;
+    gap: 2px;
+    padding: 2px;
+    border: 0;
+    background: #f0f2e9;
+    box-shadow: none;
+  }
+  .travel-dashboard .view-switch button {
+    flex: 1;
+    min-height: 24px;
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+  .travel-dashboard .visit-switch {
+    min-height: 26px;
+    padding: 2px 4px;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .travel-dashboard .progress-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .travel-dashboard #count {
+    font-size: 26px;
+    line-height: 1.1;
+    letter-spacing: -1px;
+  }
+  .travel-dashboard .progress-caption {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 0;
+  }
+  .travel-dashboard .progress-footer {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+  }
+  .travel-dashboard .progress-footer button {
+    font-size: 11px;
+  }
+  .travel-dashboard #area-count {
+    grid-column: 1 / -1;
+    margin-top: 2px;
+  }
+  .travel-dashboard .progress-track {
+    grid-column: 1 / -1;
+    margin: 3px 0;
+  }
+  .travel-dashboard .search-wrap {
+    padding: 6px 10px;
+    border-color: #e7e9df;
+    background: #f9faf4;
+    box-shadow: none;
+  }
+  .travel-dashboard #search {
+    font-size: 16px;
+  }
+  .travel-dashboard #results-panel {
+    width: 100%;
+    max-height: 30dvh;
+  }
+  #country-card {
+    z-index: 3;
+  }
+}
