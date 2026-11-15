@@ -291,6 +291,14 @@ $('new-quiz').onclick=()=>{if(!confirm(`Clear answers for ${viewMode==='states'?
 $('focus-button').onclick=()=>focusCountry(selected);
 function closeCard(){selected=null;$('country-card').hidden=true;update()}
 $('close-card').onclick=closeCard;
+// Capture the tap before a map feature can select another place underneath it.
+document.addEventListener('click',event=>{
+  const card=$('country-card');
+  if(!matchMedia('(max-width: 700px)').matches||card.hidden||card.contains(event.target))return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeCard();
+},true);
 function openList(){$('results-panel').hidden=false;$('list-toggle').setAttribute('aria-expanded','true');renderList()}
 $('search').onfocus=openList;$('search').oninput=openList;
 $('list-toggle').onclick=()=>{if($('results-panel').hidden)openList();else $('close-list').click()};

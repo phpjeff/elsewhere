@@ -326,6 +326,14 @@ $('category-name').addEventListener('input',()=>$('category-name').setCustomVali
 $('clear-category').onclick=()=>{if(selected)assignCategory(null)};
 $('focus-button').onclick=()=>focusCountry(selected);
 $('close-card').onclick=()=>{selected=null;$('country-card').hidden=true;update()};
+// Capture the tap before a map feature can select another place underneath it.
+document.addEventListener('click',event=>{
+  const card=$('country-card');
+  if(!matchMedia('(max-width: 700px)').matches||card.hidden||card.contains(event.target))return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  $('close-card').click();
+},true);
 function openList(){ $('results-panel').hidden=false;$('list-toggle').setAttribute('aria-expanded','true');renderList() }
 $('search').addEventListener('focus',openList);$('search').addEventListener('input',openList);$('search').addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();$('results').querySelector('button')?.focus()}});
 $('list-toggle').onclick=()=>{const open=$('results-panel').hidden;$('results-panel').hidden=!open;$('list-toggle').setAttribute('aria-expanded',String(open));renderList()};$('close-list').onclick=()=>{$('results-panel').hidden=true;$('list-toggle').setAttribute('aria-expanded','false')};
